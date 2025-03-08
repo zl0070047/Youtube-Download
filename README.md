@@ -2,7 +2,7 @@
 
 一个简单易用的 YouTube 视频下载工具，支持下载视频和音频，拥有美观的用户界面和友好的交互体验。
 
-![应用截图](https://via.placeholder.com/800x600?text=YouTube+下载器界面)
+<img width="895" alt="image" src="https://github.com/user-attachments/assets/caae72b3-7836-4f2a-858e-aa9a8aedaba9" />
 
 ## 主要功能
 
@@ -118,6 +118,7 @@ python "YouTube download.py"
 
 - **制作者**：朱富贵
 - **公众号**：关注公众号获取更多实用工具和教程
+![WechatIMG685](https://github.com/user-attachments/assets/c1375480-6333-4896-942f-5827b53b537d)
 
 ## 许可证
 
