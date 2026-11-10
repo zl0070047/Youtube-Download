@@ -580,47 +580,66 @@ class YouTubeDownloader:
         """开始下载"""
         url = self.url_entry.get().strip()
         if not url:
-            messagebox.showerror("错误", "请输入视频地址")
+            messagebox.showwarning("警告", "请输入视频地址")
+            return
+            
+        if not self.format_info:
+            messagebox.showwarning("警告", "请先检查视频信息")
             return
             
         download_type = self.download_type.get()
-        selected_format = self.format_combo.get()
-        selected_quality = self.quality_var.get()
+        selected_format = self.video_format.get()
+        quality = self.quality_combo.get()
         
-        # 验证保存路径
-        save_path = self.path_var.get()
-        if not os.path.exists(save_path):
-            try:
-                os.makedirs(save_path)
-            except:
-                messagebox.showerror("错误", "保存路径无效或无权限创建文件夹")
-                return
-        
-        self.save_path = save_path
-        
-        # 设置下载选项
+        # 构建下载选项
         ydl_opts = {
-            'format': self._get_format_string(download_type, selected_quality),
             'outtmpl': os.path.join(self.save_path, '%(title)s.%(ext)s'),
             'progress_hooks': [self.download_progress_hook],
+            'format': self._get_format_string(download_type, quality),
+            'writesubtitles': False,
+            'writeautomaticsub': False,
+            'ignoreerrors': True,
+            'no_warnings': True,
+            'quiet': False,
+            'verbose': False,
+            'abort_on_error': False,  # 不因错误而中止
+            'merge_output_format': 'mp4' if selected_format == "mp4" else selected_format,
         }
         
-        if download_type == "audio":
-            ydl_opts.update({
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': selected_format,
-                    'preferredquality': '192',
-                }]
-            })
-        elif download_type == "video" and selected_format == "mp4":
-            ydl_opts.update({
-                'merge_output_format': 'mp4',
-                'postprocessors': [{
-                    'key': 'FFmpegVideoConvertor',
-                    'preferedformat': 'mp4',
-                }]
-            })
+        # 检查 ffmpeg 是否可用，如果不可用则使用更简单的配置
+        try:
+            import subprocess
+            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+            ffmpeg_available = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            ffmpeg_available = False
+            print("警告: ffmpeg 未安装，将使用简化配置")
+        
+        # 只有在 ffmpeg 可用时才使用后处理器
+        if ffmpeg_available:
+            if download_type == "audio":
+                ydl_opts.update({
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': selected_format,
+                        'preferredquality': '192',
+                    }]
+                })
+            elif download_type == "video" and selected_format == "mp4":
+                ydl_opts.update({
+                    'postprocessors': [{
+                        'key': 'FFmpegVideoConvertor',
+                        'preferedformat': 'mp4',
+                    }]
+                })
+        else:
+            # 没有 ffmpeg 时的简化配置
+            if download_type == "audio":
+                ydl_opts['format'] = 'bestaudio/best'
+                ydl_opts['merge_output_format'] = 'm4a' if selected_format == "m4a" else 'mp3'
+            else:
+                # 对于视频，选择最佳的单文件格式
+                ydl_opts['format'] = 'best[ext=mp4]/best[ext=webm]/best'
         
         self.download_btn.config(state='disabled')
         self.check_btn.config(state='disabled')
@@ -636,15 +655,30 @@ class YouTubeDownloader:
         
     def _get_format_string(self, download_type, quality):
         """获取格式字符串"""
+        # 检查 ffmpeg 是否可用
+        try:
+            import subprocess
+            subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+            ffmpeg_available = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            ffmpeg_available = False
+        
         if download_type == "audio":
-            return "bestaudio/best"
+            if ffmpeg_available:
+                return "bestaudio/best"
+            else:
+                return "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio/best"
         else:
-            try:
-                height = int(quality.replace('p', ''))
-                selected_format = self.format_combo.get()
-                return f"bestvideo[height<={height}][ext={selected_format}]+bestaudio/best"
-            except:
-                return "bestvideo+bestaudio/best"
+            if ffmpeg_available:
+                try:
+                    height = int(quality.replace('p', ''))
+                    selected_format = self.video_format.get()
+                    return f"bestvideo[height<={height}][ext={selected_format}]+bestaudio/best"
+                except:
+                    return "bestvideo+bestaudio/best"
+            else:
+                # 没有 ffmpeg 时选择最佳的单文件格式
+                return "best[ext=mp4]/best[ext=webm]/best"
             
     def _download_thread(self, url, opts):
         """下载处理线程"""
